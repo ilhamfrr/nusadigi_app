@@ -6,6 +6,8 @@ import { db } from "@/lib/db";
 import { comparePassword } from "@/lib/utils/password";
 import { z } from "zod";
 
+export const runtime = "nodejs";
+
 const loginSchema = z.object({
     email: z.string().email(),
     password: z.string().min(6),
