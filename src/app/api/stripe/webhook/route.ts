@@ -44,8 +44,8 @@ export async function POST(request: NextRequest) {
                     sub.status.toUpperCase() as SubscriptionStatus,
                     sub.items.data[0]?.price.id ?? "",
                     sub.customer as string,
-                    new Date(sub.current_period_start * 1000),
-                    new Date(sub.current_period_end * 1000)
+                    new Date((sub as any).current_period_start * 1000),
+                    new Date((sub as any).current_period_end * 1000)
                 );
                 break;
             }
@@ -61,8 +61,8 @@ export async function POST(request: NextRequest) {
                     SubscriptionStatus.CANCELED,
                     sub.items.data[0]?.price.id ?? "",
                     sub.customer as string,
-                    new Date(sub.current_period_start * 1000),
-                    new Date(sub.current_period_end * 1000)
+                    new Date((sub as any).current_period_start * 1000),
+                    new Date((sub as any).current_period_end * 1000)
                 );
                 break;
             }
