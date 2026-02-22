@@ -1,0 +1,202 @@
+// Nusadigi - Production Prisma Schema
+// Multi-Tenant SaaS White Label Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  TENANT_ADMIN
+  TENANT_STAFF
+}
+
+enum PlanType {
+  RESELLER
+  WHITE_LABEL
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  UNPAID
+}
+
+enum TenantStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+// ─── Core Models ─────────────────────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  password      String?
+  name          String?
+  image         String?
+  role          UserRole @default(TENANT_STAFF)
+  emailVerified DateTime?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  // Relations
+  tenantUsers   TenantUser[]
+  stripeCustomer StripeCustomer?
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+model Tenant {
+  id           String       @id @default(cuid())
+  name         String
+  slug         String       @unique  // subdomain: "acme" → acme.nusadigi.id
+  domain       String?      @unique  // custom domain (optional)
+  logo         String?
+  primaryColor String       @default("#DC2626")
+  status       TenantStatus @default(PENDING)
+  
+  // White label settings
+  companyName  String?
+  tagline      String?
+  supportEmail String?
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  // Relations
+  tenantUsers   TenantUser[]
+  subscription  Subscription?
+  stripeSubscriptions StripeSubscription[]
+
+  @@index([slug])
+  @@index([status])
+  @@map("tenants")
+}
+
+model TenantUser {
+  id       String   @id @default(cuid())
+  userId   String
+  tenantId String
+  role     UserRole @default(TENANT_STAFF)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@index([tenantId])
+  @@index([userId])
+  @@map("tenant_users")
+}
+
+// ─── Subscription & Billing ──────────────────────────────────────────────────
+
+model Plan {
+  id          String   @id @default(cuid())
+  name        String
+  type        PlanType
+  description String?
+  price       Float    // in USD cents
+  interval    String   @default("month") // month | year
+  
+  // Feature flags (JSON)
+  features    Json     @default("{}")
+  
+  // Stripe price ID
+  stripePriceId String? @unique
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@index([type])
+  @@map("plans")
+}
+
+model Subscription {
+  id       String             @id @default(cuid())
+  tenantId String             @unique
+  planId   String
+
+  status        SubscriptionStatus @default(TRIALING)
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  trialEnd           DateTime?
+  cancelAtPeriodEnd  Boolean    @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant           Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan             Plan   @relation(fields: [planId], references: [id])
+  stripeSubscription StripeSubscription?
+
+  @@index([planId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+// ─── Stripe ──────────────────────────────────────────────────────────────────
+
+model StripeCustomer {
+  id             String @id @default(cuid())
+  userId         String @unique
+  customerId     String @unique  // Stripe customer ID
+  email          String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("stripe_customers")
+}
+
+model StripeSubscription {
+  id             String @id @default(cuid())
+  subscriptionId String @unique  // Stripe subscription ID
+  tenantId       String
+  subscriptionDbId String? @unique
+
+  status     SubscriptionStatus
+  priceId    String
+  customerId String
+
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd  Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionDbId], references: [id])
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@map("stripe_subscriptions")
+}

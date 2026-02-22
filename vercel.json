@@ -1,0 +1,9 @@
+{
+  "rewrites": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "(?<subdomain>[^.]+).nusadigi.id" }],
+      "destination": "/tenant/:subdomain/:path*"
+    }
+  ]
+}
